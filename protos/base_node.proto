@@ -1,0 +1,115 @@
+syntax = "proto3";
+
+package tari.rpc;
+
+// Generic empty message
+message Empty {}
+
+// Version information
+message VersionResponse {
+    string version = 1;
+}
+
+// Node Identity
+message NodeIdentity {
+    bytes public_key = 1;
+    repeated string public_addresses = 2;
+    bytes node_id = 3;
+}
+
+// Network Status
+message NetworkStatusResponse {
+    enum Status {
+        LISTENING = 0;
+        CONNECTING = 1;
+        ONLINE = 2;
+        DEGRADED = 3;
+        OFFLINE = 4;
+    }
+    Status status = 1;
+    uint32 avg_latency_ms = 2;
+    uint32 num_node_connections = 3;
+}
+
+// Tip Info & Chain Metadata
+message ChainMetadata {
+    uint64 height_of_longest_chain = 1;
+    bytes best_block_hash = 2;
+    bytes accumulated_difficulty = 3;
+    uint64 pruned_height = 4;
+}
+
+message TipInfoResponse {
+    ChainMetadata metadata = 1;
+    bool is_synced = 2;
+}
+
+// Sync Progress
+message SyncProgressResponse {
+    uint64 tip = 1;
+    uint64 local_height = 2;
+    enum SyncState {
+        STARTING = 0;
+        HEADER_SYNC = 1;
+        BLOCK_SYNC = 2;
+        SYNCED = 3;
+    }
+    SyncState state = 3;
+}
+
+// Mining & Block Template
+message NewBlockTemplateRequest {
+    uint64 weight = 1;
+}
+
+message BlockHeader {
+    uint64 version = 1;
+    uint64 height = 2;
+    bytes prev_hash = 3;
+    uint64 timestamp = 4;
+    bytes total_kernel_offset = 5;
+    bytes total_script_offset = 6;
+    bytes nonce = 7;
+}
+
+message NewBlockTemplateResponse {
+    string miner_data = 1;
+    BlockHeader header = 2;
+    uint64 reward = 3;
+    uint64 total_fees = 4;
+    uint64 weight = 5;
+    bytes target_difficulty = 6;
+}
+
+// Mempool Statistics
+message MempoolStatsResponse {
+    uint64 unconfirmed_txs = 1;
+    uint64 reorg_txs = 2;
+    uint64 unconfirmed_weight = 3;
+}
+
+// Active Peers
+message Peer {
+    bytes public_key = 1;
+    bytes node_id = 2;
+    repeated string addresses = 3;
+    uint64 last_connection = 4;
+    string user_agent = 5;
+    uint32 latency_ms = 6;
+}
+
+message ActiveSyncPeersResponse {
+    repeated Peer peers = 1;
+}
+
+// Tari Base Node RPC Service
+service BaseNode {
+    rpc GetVersion (Empty) returns (VersionResponse);
+    rpc Identify (Empty) returns (NodeIdentity);
+    rpc GetNetworkStatus (Empty) returns (NetworkStatusResponse);
+    rpc GetTipInfo (Empty) returns (TipInfoResponse);
+    rpc GetSyncProgress (Empty) returns (SyncProgressResponse);
+    rpc GetNewBlockTemplate (NewBlockTemplateRequest) returns (NewBlockTemplateResponse);
+    rpc GetMempoolStats (Empty) returns (MempoolStatsResponse);
+    rpc GetActiveSyncPeers (Empty) returns (ActiveSyncPeersResponse);
+}

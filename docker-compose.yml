@@ -1,0 +1,54 @@
+version: "3.8"
+
+services:
+  minotari-monitor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: minotari-node-monitor
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-8000}:8000"
+    env_file:
+      - .env
+    environment:
+      - TARI_NODE_GRPC_HOST=${TARI_NODE_GRPC_HOST:-host.docker.internal}
+      - TARI_NODE_GRPC_PORT=${TARI_NODE_GRPC_PORT:-18145}
+      - POLL_INTERVAL_SECONDS=${POLL_INTERVAL_SECONDS:-15}
+      - WEB_HOST=0.0.0.0
+      - WEB_PORT=8000
+      - GITHUB_REPO=${GITHUB_REPO:-tari-project/tari}
+      - TARI_NODE_TLS=${TARI_NODE_TLS:-false}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    # Enables accessing host machine services via host.docker.internal on Linux
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  # --------------------------------------------------------------------------
+  # Optional: Minotari Base Node (if running node itself in same docker-compose)
+  # Uncomment the block below to run the official Tari node alongside monitor:
+  # --------------------------------------------------------------------------
+  # minotari-node:
+  #   image: quay.io/tarilabs/minotari_node:latest
+  #   container_name: minotari-node
+  #   restart: unless-stopped
+  #   ports:
+  #     - "18145:18145" # gRPC
+  #     - "18141:18141" # P2P
+  #   volumes:
+  #     - minotari_data:/var/tari
+  #   command: ["--network", "esmeralda", "--enable-grpc"]
+
+# volumes:
+#   minotari_data:

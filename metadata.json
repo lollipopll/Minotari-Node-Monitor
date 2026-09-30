@@ -1,0 +1,6 @@
+{
+  "name": "Minotari Node Monitor | Tari Network Dashboard",
+  "description": "Production-grade monitoring system, gRPC health checker, and Docker deployment stack for Tari minotari_node blockchain nodes.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
