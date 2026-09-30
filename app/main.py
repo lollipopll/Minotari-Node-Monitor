@@ -9,6 +9,7 @@ import sys
 import time
 import logging
 import asyncio
+import re
 from datetime import datetime, timezone
 from typing import Dict, Any, List
 
@@ -65,6 +66,83 @@ def record_log(level: str, msg: str):
         RECENT_LOGS.pop(0)
 
 
+def parse_sync_info(sync_progress: Dict[str, Any], tip_info: Dict[str, Any]) -> Dict[str, Any]:
+    """Parse Tari v6 horizon sync and kernel synchronization progress."""
+    short_desc = sync_progress.get("short_desc", "") if sync_progress else ""
+    base_state = tip_info.get("base_node_state", "") if tip_info else ""
+    raw_state = sync_progress.get("state", "STARTING") if sync_progress else "STARTING"
+
+    parsed: Dict[str, Any] = {
+        "status_phase": base_state or raw_state,
+        "is_synced": tip_info.get("is_synced", False) if tip_info else False,
+        "is_syncing": False,
+        "stage_title": "Initializing",
+        "current_items": 0,
+        "total_items": 0,
+        "percentage": 0.0,
+        "speed": "",
+        "eta": "",
+        "sync_peer": "",
+        "description": short_desc,
+        "explanation": "Node daemon is discovering network peers.",
+    }
+
+    if base_state == "HORIZON_SYNC" or "Syncing" in short_desc:
+        parsed["is_syncing"] = True
+        parsed["status_phase"] = "HORIZON_SYNC"
+        parsed["stage_title"] = "Horizon Sync (Kernel MMR)"
+        parsed["explanation"] = (
+            "Horizon Sync in progress: Synchronizing Mimblewimble kernel mountain range (MMR) "
+            "and UTXO commitments before validating block transactions."
+        )
+
+        # Regex: Syncing kernels: 2300800/7391619 (31%) from ba5ad438c741e6a24bf37edf2f (550.10 kernels/s) Latency: 351.00ns
+        match = re.search(
+            r"Syncing\s+([^:]+):\s+(\d+)/(\d+)\s+\((\d+)%\)\s+from\s+(\S+)\s+\(([\d\.]+)\s+([^)]+)\)",
+            short_desc,
+        )
+        if match:
+            stage_name, current_str, total_str, pct_str, peer, speed_num, speed_unit = match.groups()
+            curr = int(current_str)
+            tot = int(total_str)
+            speed = float(speed_num)
+            parsed["stage_title"] = f"Syncing {stage_name.capitalize()}"
+            parsed["current_items"] = curr
+            parsed["total_items"] = tot
+            parsed["percentage"] = float(pct_str)
+            parsed["speed"] = f"{speed_num} {speed_unit}"
+            parsed["sync_peer"] = peer
+
+            if speed > 0 and tot > curr:
+                rem_seconds = int((tot - curr) / speed)
+                hours = rem_seconds // 3600
+                minutes = (rem_seconds % 3600) // 60
+                parsed["eta"] = f"{hours}h {minutes}m" if hours > 0 else f"{minutes}m"
+        elif "%" in short_desc:
+            pct_match = re.search(r"(\d+)%", short_desc)
+            if pct_match:
+                parsed["percentage"] = float(pct_match.group(1))
+
+    elif base_state == "HEADER_SYNC" or raw_state == "HEADER_SYNC":
+        parsed["is_syncing"] = True
+        parsed["status_phase"] = "HEADER_SYNC"
+        parsed["stage_title"] = "Syncing Block Headers"
+        parsed["explanation"] = "Discovering blockchain tip by syncing headers from peers."
+    elif base_state == "BLOCK_SYNC" or raw_state == "BLOCK_SYNC":
+        parsed["is_syncing"] = True
+        parsed["status_phase"] = "BLOCK_SYNC"
+        parsed["stage_title"] = "Downloading Blocks"
+        parsed["explanation"] = "Downloading and verifying blocks between horizon checkpoint and tip."
+    elif tip_info and tip_info.get("is_synced"):
+        parsed["is_synced"] = True
+        parsed["status_phase"] = "SYNCED"
+        parsed["percentage"] = 100.0
+        parsed["stage_title"] = "Fully Synchronized"
+        parsed["explanation"] = "Node is synchronized with chain tip and tracking real-time transactions."
+
+    return parsed
+
+
 # -----------------------------------------------------------------------------
 # Global Monitoring State
 # -----------------------------------------------------------------------------
@@ -82,6 +160,7 @@ state: Dict[str, Any] = {
     "network_status": None,
     "tip_info": None,
     "sync_progress": None,
+    "sync_details": None,
     "block_template": None,
     "mempool": None,
     "peers": [],
@@ -133,14 +212,28 @@ async def monitoring_worker():
                 state["network_status"] = metrics.get("network_status")
                 state["tip_info"] = metrics.get("tip_info")
                 state["sync_progress"] = metrics.get("sync_progress")
+                state["sync_details"] = parse_sync_info(state["sync_progress"], state["tip_info"])
                 state["block_template"] = metrics.get("block_template")
                 state["mempool"] = metrics.get("mempool")
                 state["peers"] = metrics.get("peers", [])
 
-                log_msg = (
-                    f"Node Online | Tip Height: {state['tip_info']['height']} | "
-                    f"Sync: {state['sync_progress']['state']} | Peers: {len(state['peers'])}"
+                sync_dt = state["sync_details"]
+                total_conns = (
+                    state["network_status"].get("num_node_connections", len(state["peers"]))
+                    if state["network_status"]
+                    else len(state["peers"])
                 )
+
+                if sync_dt["is_syncing"]:
+                    log_msg = (
+                        f"Node Status: {sync_dt['status_phase']} ({sync_dt['percentage']:.0f}% {sync_dt['stage_title']}) | "
+                        f"Speed: {sync_dt['speed'] or 'active'} | ETA: {sync_dt['eta'] or 'calculating'} | Connections: {total_conns}"
+                    )
+                else:
+                    log_msg = (
+                        f"Node Status: {sync_dt['status_phase']} | Tip Height: {state['tip_info']['height']} | "
+                        f"Connections: {total_conns}"
+                    )
                 logger.info(log_msg)
                 record_log("INFO", log_msg)
             else:
