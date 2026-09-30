@@ -200,9 +200,9 @@ async def on_startup():
 async def dashboard_view(request: Request):
     """Render lightweight, self-contained dashboard."""
     return templates.TemplateResponse(
-        "index.html",
-        {
-            "request": request,
+        request=request,
+        name="index.html",
+        context={
             "state": state,
             "config": settings,
         },

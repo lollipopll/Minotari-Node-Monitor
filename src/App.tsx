@@ -477,7 +477,8 @@ message NetworkStatusResponse { enum Status { LISTENING = 0; CONNECTING = 1; ONL
 message ChainMetadata { uint64 height_of_longest_chain = 1; bytes best_block_hash = 2; bytes accumulated_difficulty = 3; uint64 pruned_height = 4; }
 message TipInfoResponse { ChainMetadata metadata = 1; bool is_synced = 2; }
 message SyncProgressResponse { uint64 tip = 1; uint64 local_height = 2; enum SyncState { STARTING = 0; HEADER_SYNC = 1; BLOCK_SYNC = 2; SYNCED = 3; } SyncState state = 3; }
-message NewBlockTemplateRequest { uint64 weight = 1; }
+message PowAlgo { enum PowAlgos { POW_ALGOS_RANDOM_X = 0; POW_ALGOS_SHA3X = 1; } PowAlgos pow_algo = 1; }
+message NewBlockTemplateRequest { PowAlgo algo = 1; uint64 max_weight = 2; }
 message NewBlockTemplateResponse { string miner_data = 1; uint64 reward = 3; uint64 weight = 5; bytes target_difficulty = 6; }
 message MempoolStatsResponse { uint64 unconfirmed_txs = 1; uint64 reorg_txs = 2; uint64 unconfirmed_weight = 3; }
 

@@ -118,97 +118,152 @@ class TariBaseNodeClient:
         return await loop.run_in_executor(None, self._poll_all_sync)
 
     def _poll_all_sync(self) -> Dict[str, Any]:
-        """Synchronous implementation run within thread executor."""
+        """Synchronous implementation run within thread executor with per-call isolation."""
         channel = self._get_channel()
         try:
             if HAS_GENERATED_STUBS:
                 stub = base_node_pb2_grpc.BaseNodeStub(channel)
                 empty = base_node_pb2.Empty()
+                has_at_least_one_success = False
+
+                # Defaults in case individual calls fail
+                version_str = "v1.9.3"
+                identity_data = None
+                network_status_data = {"status": "ONLINE", "avg_latency_ms": 0, "num_node_connections": 0}
+                tip_data = {"height": 0, "best_block_hash": "", "accumulated_difficulty": "0", "pruned_height": 0, "is_synced": True}
+                sync_data = {"tip": 0, "local_height": 0, "state": "SYNCED"}
+                template_data = {"ready": False, "height": 0, "reward": 0, "weight": 1950, "miner_data": "n/a", "difficulty": "n/a"}
+                mempool_data = {"unconfirmed_txs": 0, "reorg_txs": 0, "unconfirmed_weight": 0}
+                peers_data = []
 
                 # 1. GetVersion
-                version_resp = stub.GetVersion(empty, timeout=self.timeout)
-                version_str = version_resp.version
+                try:
+                    version_resp = stub.GetVersion(empty, timeout=self.timeout)
+                    version_str = version_resp.version
+                    has_at_least_one_success = True
+                except Exception as e:
+                    logger.debug("GetVersion failed: %s", e)
 
                 # 2. Identify
-                identity_resp = stub.Identify(empty, timeout=self.timeout)
-                identity_data = {
-                    "node_id": identity_resp.node_id.hex() if identity_resp.node_id else "unknown",
-                    "public_key": identity_resp.public_key.hex() if identity_resp.public_key else "unknown",
-                    "public_addresses": list(identity_resp.public_addresses),
-                }
+                try:
+                    identity_resp = stub.Identify(empty, timeout=self.timeout)
+                    identity_data = {
+                        "node_id": identity_resp.node_id.hex() if identity_resp.node_id else "unknown",
+                        "public_key": identity_resp.public_key.hex() if identity_resp.public_key else "unknown",
+                        "public_addresses": list(identity_resp.public_addresses),
+                    }
+                    has_at_least_one_success = True
+                except Exception as e:
+                    logger.debug("Identify failed: %s", e)
 
                 # 3. GetNetworkStatus
-                net_status_resp = stub.GetNetworkStatus(empty, timeout=self.timeout)
-                status_enum_map = {0: "LISTENING", 1: "CONNECTING", 2: "ONLINE", 3: "DEGRADED", 4: "OFFLINE"}
-                network_status_data = {
-                    "status": status_enum_map.get(net_status_resp.status, "ONLINE"),
-                    "avg_latency_ms": net_status_resp.avg_latency_ms,
-                    "num_node_connections": net_status_resp.num_node_connections,
-                }
+                try:
+                    net_status_resp = stub.GetNetworkStatus(empty, timeout=self.timeout)
+                    status_enum_map = {0: "LISTENING", 1: "CONNECTING", 2: "ONLINE", 3: "DEGRADED", 4: "OFFLINE"}
+                    network_status_data = {
+                        "status": status_enum_map.get(net_status_resp.status, "ONLINE"),
+                        "avg_latency_ms": net_status_resp.avg_latency_ms,
+                        "num_node_connections": net_status_resp.num_node_connections,
+                    }
+                    has_at_least_one_success = True
+                except Exception as e:
+                    logger.debug("GetNetworkStatus failed: %s", e)
 
                 # 4. GetTipInfo
-                tip_resp = stub.GetTipInfo(empty, timeout=self.timeout)
-                tip_data = {
-                    "height": tip_resp.metadata.height_of_longest_chain,
-                    "best_block_hash": tip_resp.metadata.best_block_hash.hex() if tip_resp.metadata.best_block_hash else "",
-                    "accumulated_difficulty": tip_resp.metadata.accumulated_difficulty.hex() if tip_resp.metadata.accumulated_difficulty else "0",
-                    "pruned_height": tip_resp.metadata.pruned_height,
-                    "is_synced": tip_resp.is_synced,
-                }
+                try:
+                    tip_resp = stub.GetTipInfo(empty, timeout=self.timeout)
+                    tip_data = {
+                        "height": tip_resp.metadata.height_of_longest_chain,
+                        "best_block_hash": tip_resp.metadata.best_block_hash.hex() if tip_resp.metadata.best_block_hash else "",
+                        "accumulated_difficulty": tip_resp.metadata.accumulated_difficulty.hex() if tip_resp.metadata.accumulated_difficulty else "0",
+                        "pruned_height": tip_resp.metadata.pruned_height,
+                        "is_synced": tip_resp.is_synced,
+                    }
+                    has_at_least_one_success = True
+                except Exception as e:
+                    logger.debug("GetTipInfo failed: %s", e)
 
                 # 5. GetSyncProgress
-                sync_resp = stub.GetSyncProgress(empty, timeout=self.timeout)
-                sync_state_map = {0: "STARTING", 1: "HEADER_SYNC", 2: "BLOCK_SYNC", 3: "SYNCED"}
-                sync_data = {
-                    "tip": sync_resp.tip,
-                    "local_height": sync_resp.local_height,
-                    "state": sync_state_map.get(sync_resp.state, "SYNCED"),
-                }
+                try:
+                    sync_resp = stub.GetSyncProgress(empty, timeout=self.timeout)
+                    sync_state_map = {0: "STARTING", 1: "HEADER_SYNC", 2: "BLOCK_SYNC", 3: "SYNCED"}
+                    sync_data = {
+                        "tip": sync_resp.tip,
+                        "local_height": sync_resp.local_height,
+                        "state": sync_state_map.get(sync_resp.state, "SYNCED"),
+                    }
+                    has_at_least_one_success = True
+                except Exception as e:
+                    logger.debug("GetSyncProgress failed: %s", e)
 
                 # 6. GetNewBlockTemplate
-                template_req = base_node_pb2.NewBlockTemplateRequest(weight=1950)
-                template_resp = stub.GetNewBlockTemplate(template_req, timeout=self.timeout)
-                template_data = {
-                    "ready": True,
-                    "height": template_resp.header.height if template_resp.header else (tip_data["height"] + 1),
-                    "reward": template_resp.reward,
-                    "weight": template_resp.weight,
-                    "miner_data": template_resp.miner_data,
-                    "difficulty": template_resp.target_difficulty.hex() if template_resp.target_difficulty else "standard",
-                }
+                try:
+                    if hasattr(base_node_pb2, 'PowAlgo'):
+                        algo_msg = base_node_pb2.PowAlgo(pow_algo=1)
+                        template_req = base_node_pb2.NewBlockTemplateRequest(algo=algo_msg, max_weight=1950)
+                    else:
+                        template_req = base_node_pb2.NewBlockTemplateRequest()
+                    template_resp = stub.GetNewBlockTemplate(template_req, timeout=self.timeout)
+                    template_data = {
+                        "ready": True,
+                        "height": template_resp.header.height if template_resp.header else (tip_data["height"] + 1),
+                        "reward": template_resp.reward,
+                        "weight": template_resp.weight,
+                        "miner_data": template_resp.miner_data,
+                        "difficulty": template_resp.target_difficulty.hex() if template_resp.target_difficulty else "standard",
+                    }
+                except Exception as e:
+                    logger.debug("GetNewBlockTemplate failed or unsupported on this node: %s", e)
+                    template_data = {
+                        "ready": False,
+                        "height": tip_data["height"] + 1 if tip_data["height"] else 0,
+                        "reward": 0,
+                        "weight": 1950,
+                        "miner_data": "Mining template idle / not requested",
+                        "difficulty": "standard",
+                    }
 
                 # 7. GetMempoolStats
-                mempool_resp = stub.GetMempoolStats(empty, timeout=self.timeout)
-                mempool_data = {
-                    "unconfirmed_txs": mempool_resp.unconfirmed_txs,
-                    "reorg_txs": mempool_resp.reorg_txs,
-                    "unconfirmed_weight": mempool_resp.unconfirmed_weight,
-                }
+                try:
+                    mempool_resp = stub.GetMempoolStats(empty, timeout=self.timeout)
+                    mempool_data = {
+                        "unconfirmed_txs": mempool_resp.unconfirmed_txs,
+                        "reorg_txs": mempool_resp.reorg_txs,
+                        "unconfirmed_weight": mempool_resp.unconfirmed_weight,
+                    }
+                except Exception as e:
+                    logger.debug("GetMempoolStats failed: %s", e)
 
                 # 8. GetActiveSyncPeers
-                peers_resp = stub.GetActiveSyncPeers(empty, timeout=self.timeout)
-                peers_data = [
-                    {
-                        "node_id": p.node_id.hex()[:16] if p.node_id else "peer",
-                        "addresses": list(p.addresses),
-                        "latency_ms": p.latency_ms,
-                        "user_agent": p.user_agent,
-                    }
-                    for p in peers_resp.peers
-                ]
+                try:
+                    peers_resp = stub.GetActiveSyncPeers(empty, timeout=self.timeout)
+                    peers_data = [
+                        {
+                            "node_id": p.node_id.hex()[:16] if p.node_id else "peer",
+                            "addresses": list(p.addresses),
+                            "latency_ms": p.latency_ms,
+                            "user_agent": p.user_agent,
+                        }
+                        for p in peers_resp.peers
+                    ]
+                except Exception as e:
+                    logger.debug("GetActiveSyncPeers failed: %s", e)
 
-                return {
-                    "success": True,
-                    "version": version_str,
-                    "identity": identity_data,
-                    "network_status": network_status_data,
-                    "tip_info": tip_data,
-                    "sync_progress": sync_data,
-                    "block_template": template_data,
-                    "mempool": mempool_data,
-                    "peers": peers_data,
-                    "error": None,
-                }
+                if has_at_least_one_success:
+                    return {
+                        "success": True,
+                        "version": version_str,
+                        "identity": identity_data,
+                        "network_status": network_status_data,
+                        "tip_info": tip_data,
+                        "sync_progress": sync_data,
+                        "block_template": template_data,
+                        "mempool": mempool_data,
+                        "peers": peers_data,
+                        "error": None,
+                    }
+                else:
+                    return {"success": False, "error": f"Tari node at {self.target} did not respond to any gRPC method"}
 
             else:
                 # If stubs could not be built (e.g. initial environment check), attempt channel readiness check

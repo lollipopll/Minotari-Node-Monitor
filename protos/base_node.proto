@@ -58,8 +58,17 @@ message SyncProgressResponse {
 }
 
 // Mining & Block Template
+message PowAlgo {
+    enum PowAlgos {
+        POW_ALGOS_RANDOM_X = 0;
+        POW_ALGOS_SHA3X = 1;
+    }
+    PowAlgos pow_algo = 1;
+}
+
 message NewBlockTemplateRequest {
-    uint64 weight = 1;
+    PowAlgo algo = 1;
+    uint64 max_weight = 2;
 }
 
 message BlockHeader {
