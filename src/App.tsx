@@ -288,10 +288,10 @@ export default function App() {
     'docker-compose.prod.yml': `version: "3.8"
 
 # Production deployment: Pulls pre-built image from GitHub Container Registry (GHCR)
-# No local compilation, no Python/protoc needed on your server!
+# Image: ghcr.io/lollipopll/minotari-node-monitor:latest
 services:
   minotari-monitor:
-    image: ghcr.io/\${GH_USER:-your-github-username}/minotari-monitor:latest
+    image: ghcr.io/lollipopll/minotari-node-monitor:latest
     container_name: minotari-node-monitor
     restart: unless-stopped
     ports:
@@ -1376,12 +1376,22 @@ service BaseNode {
           </div>
           <div className="flex items-center space-x-4">
             <a
-              href="https://github.com/tari-project/tari"
+              href="https://github.com/lollipopll/Minotari-Node-Monitor"
               target="_blank"
               rel="noreferrer"
               className="text-purple-400 hover:underline flex items-center gap-1"
             >
-              <span>GitHub tari-project/tari</span>
+              <span>GitHub lollipopll/Minotari-Node-Monitor</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
+            <span className="text-slate-700">•</span>
+            <a
+              href="https://github.com/tari-project/tari"
+              target="_blank"
+              rel="noreferrer"
+              className="text-slate-400 hover:underline flex items-center gap-1"
+            >
+              <span>Tari Upstream</span>
               <ExternalLink className="w-3 h-3" />
             </a>
           </div>

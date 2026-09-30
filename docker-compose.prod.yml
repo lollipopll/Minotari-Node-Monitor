@@ -7,8 +7,8 @@ version: "3.8"
 
 services:
   minotari-monitor:
-    # Замените <YOUR_GITHUB_USERNAME> на ваш логин GitHub, например: ghcr.io/username/minotari-monitor:latest
-    image: ghcr.io/${GH_USER:-your-github-username}/minotari-monitor:latest
+    # Готовый Docker-образ из GitHub Container Registry (ghcr.io/lollipopll/minotari-node-monitor)
+    image: ghcr.io/lollipopll/minotari-node-monitor:latest
     container_name: minotari-node-monitor
     restart: unless-stopped
     ports:

@@ -59,8 +59,8 @@
 
 ```bash
 # 1. Скачать готовый манифест и пример конфига
-curl -O https://raw.githubusercontent.com/<YOUR_USER>/<YOUR_REPO>/main/docker-compose.prod.yml
-curl -O https://raw.githubusercontent.com/<YOUR_USER>/<YOUR_REPO>/main/.env.example
+curl -O https://raw.githubusercontent.com/lollipopll/Minotari-Node-Monitor/main/docker-compose.prod.yml
+curl -O https://raw.githubusercontent.com/lollipopll/Minotari-Node-Monitor/main/.env.example
 cp .env.example .env
 
 # 2. Запустить одной командой (скачает готовый образ из реестра за пару секунд)
