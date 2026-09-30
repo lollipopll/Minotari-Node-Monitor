@@ -1,5 +1,3 @@
-version: "3.8"
-
 # ==============================================================================
 # Production Docker Compose (Ready-to-use with pre-built image from GHCR)
 # No local build, no Python/protoc dependencies required on the target server.

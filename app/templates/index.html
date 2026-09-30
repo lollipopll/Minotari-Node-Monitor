@@ -65,6 +65,20 @@
             </a>
         </div>
 
+        <!-- Sync in Progress Banner (Tari Kernel/Horizon Sync) -->
+        <div id="syncProgressBanner" class="hidden border border-purple-500/40 bg-purple-950/30 rounded-xl p-4 flex flex-col gap-2 shadow-lg shadow-purple-950/20">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-purple-300 uppercase tracking-wider flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-purple-400 animate-ping"></span>
+                    Blockchain Syncing: <span id="syncModeTitle" class="text-white mono">HORIZON_SYNC</span>
+                </span>
+                <span id="syncPercentBadge" class="text-xs font-mono font-bold px-2.5 py-1 rounded-full bg-purple-900/60 text-purple-200 border border-purple-700">Syncing...</span>
+            </div>
+            <div id="syncShortDesc" class="text-xs font-mono text-purple-200 break-words bg-slate-950/80 p-2.5 rounded-lg border border-purple-900/40">
+                --
+            </div>
+        </div>
+
         <!-- Node Status & Main Banner -->
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
             <!-- Node Connectivity Status -->
@@ -301,19 +315,57 @@
             if (data.tip_info) {
                 document.getElementById('tipHeight').textContent = Number(data.tip_info.height).toLocaleString();
                 document.getElementById('bestBlockHash').textContent = "Hash: " + (data.tip_info.best_block_hash || "n/a");
-                document.getElementById('accumDifficulty').textContent = data.tip_info.accumulated_difficulty || "n/a";
+                let diffDisplay = data.tip_info.accumulated_difficulty || "0";
+                if (diffDisplay.length > 8) {
+                    try {
+                        const parsedInt = BigInt("0x" + diffDisplay);
+                        diffDisplay = parsedInt.toLocaleString();
+                    } catch (e) {
+                        diffDisplay = diffDisplay.slice(-16);
+                    }
+                }
+                document.getElementById('accumDifficulty').textContent = diffDisplay;
                 document.getElementById('prunedHeight').textContent = data.tip_info.pruned_height ? `Pruned (${data.tip_info.pruned_height})` : "0 (Full Archive)";
             }
 
-            if (data.sync_progress) {
-                document.getElementById('syncStateText').textContent = data.sync_progress.state || "SYNCED";
+            // Sync Banner & State
+            const syncBanner = document.getElementById('syncProgressBanner');
+            const syncShortDesc = document.getElementById('syncShortDesc');
+            const syncModeTitle = document.getElementById('syncModeTitle');
+            const syncPercentBadge = document.getElementById('syncPercentBadge');
+            const shortDesc = data.sync_progress ? (data.sync_progress.short_desc || "") : "";
+            const syncState = (data.sync_progress && data.sync_progress.state) ? data.sync_progress.state : ((data.tip_info && data.tip_info.base_node_state) ? data.tip_info.base_node_state : "SYNCED");
+
+            document.getElementById('syncStateText').textContent = syncState;
+            if (syncState === 'SYNCED') {
+                document.getElementById('syncStateText').className = "font-semibold text-emerald-400 mono";
+            } else {
+                document.getElementById('syncStateText').className = "font-semibold text-amber-400 mono";
             }
 
-            // Network
+            if (shortDesc) {
+                if (syncBanner) syncBanner.classList.remove('hidden');
+                if (syncShortDesc) syncShortDesc.textContent = shortDesc;
+                if (syncModeTitle) syncModeTitle.textContent = syncState;
+                const matchPct = shortDesc.match(/\((\d+%\))/);
+                if (syncPercentBadge) syncPercentBadge.textContent = matchPct ? matchPct[1] : "Syncing...";
+            } else if (syncState && syncState !== 'SYNCED') {
+                if (syncBanner) syncBanner.classList.remove('hidden');
+                if (syncShortDesc) syncShortDesc.textContent = `Node synchronization mode: ${syncState}`;
+                if (syncModeTitle) syncModeTitle.textContent = syncState;
+                if (syncPercentBadge) syncPercentBadge.textContent = syncState;
+            } else {
+                if (syncBanner) syncBanner.classList.add('hidden');
+            }
+
+            // Network & Connections
             if (data.network_status) {
                 document.getElementById('netLatency').textContent = data.network_status.avg_latency_ms || "0";
-                document.getElementById('p2pStatus').textContent = data.network_status.status || "ONLINE";
-                document.getElementById('peerCount').innerHTML = `Active Peers: <span class="font-semibold text-white mono">${data.peers ? data.peers.length : data.network_status.num_node_connections || 0}</span>`;
+                document.getElementById('p2pStatus').textContent = (data.network_status.status || "ONLINE").toUpperCase();
+                const totalConnections = (data.network_status.num_node_connections !== undefined && data.network_status.num_node_connections !== null)
+                    ? data.network_status.num_node_connections
+                    : (data.peers ? data.peers.length : 0);
+                document.getElementById('peerCount').innerHTML = `Active Peers: <span class="font-semibold text-white mono">${totalConnections}</span>`;
             }
 
             // Identify
@@ -326,13 +378,18 @@
                     : '<span class="text-slate-600">None advertised</span>';
             }
 
-            // Block template
+            // Block template (Mining)
             if (data.block_template) {
-                document.getElementById('miningReady').textContent = data.block_template.ready ? "READY" : "WAITING";
-                document.getElementById('templateHeight').textContent = Number(data.block_template.height).toLocaleString();
-                document.getElementById('templateReward').textContent = (data.block_template.reward / 1000000).toLocaleString() + " XTM";
+                const isReady = data.block_template.ready;
+                const miningBadge = document.getElementById('miningReady');
+                miningBadge.textContent = isReady ? "READY" : "WAITING";
+                miningBadge.className = isReady ? "font-semibold text-emerald-400 mono" : "font-semibold text-amber-400 mono";
+                document.getElementById('templateHeight').textContent = Number(data.block_template.height || 1).toLocaleString();
+                const rewardVal = Number(data.block_template.reward || 0);
+                const xtmReward = (rewardVal / 1000000).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+                document.getElementById('templateReward').textContent = (rewardVal > 0 ? xtmReward : "0") + " XTM";
                 document.getElementById('templateWeight').textContent = data.block_template.weight || "1950";
-                document.getElementById('templateMinerData').textContent = data.block_template.miner_data || "tari_sha3x";
+                document.getElementById('templateMinerData').textContent = data.block_template.miner_data || `Diff: ${data.block_template.difficulty || '12000000'}`;
             }
 
             // Mempool

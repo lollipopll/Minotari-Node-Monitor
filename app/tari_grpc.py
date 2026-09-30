@@ -159,11 +159,16 @@ class TariBaseNodeClient:
                 # 3. GetNetworkStatus
                 try:
                     net_status_resp = stub.GetNetworkStatus(empty, timeout=self.timeout)
-                    status_enum_map = {0: "LISTENING", 1: "CONNECTING", 2: "ONLINE", 3: "DEGRADED", 4: "OFFLINE"}
+                    status_raw = net_status_resp.status
+                    if isinstance(status_raw, str):
+                        status_str = status_raw.upper()
+                    else:
+                        status_enum_map = {0: "LISTENING", 1: "CONNECTING", 2: "ONLINE", 3: "DEGRADED", 4: "OFFLINE"}
+                        status_str = status_enum_map.get(status_raw, "ONLINE")
                     network_status_data = {
-                        "status": status_enum_map.get(net_status_resp.status, "ONLINE"),
-                        "avg_latency_ms": net_status_resp.avg_latency_ms,
-                        "num_node_connections": net_status_resp.num_node_connections,
+                        "status": status_str,
+                        "avg_latency_ms": int(net_status_resp.avg_latency_ms),
+                        "num_node_connections": int(net_status_resp.num_node_connections),
                     }
                     has_at_least_one_success = True
                 except Exception as e:
@@ -172,12 +177,19 @@ class TariBaseNodeClient:
                 # 4. GetTipInfo
                 try:
                     tip_resp = stub.GetTipInfo(empty, timeout=self.timeout)
+                    base_state_val = getattr(tip_resp, "base_node_state", "") or "HORIZON_SYNC"
+                    acc_diff = (
+                        tip_resp.metadata.accumulated_difficulty.hex()
+                        if tip_resp.metadata.accumulated_difficulty
+                        else "01"
+                    )
                     tip_data = {
-                        "height": tip_resp.metadata.height_of_longest_chain,
+                        "height": int(tip_resp.metadata.height_of_longest_chain),
                         "best_block_hash": tip_resp.metadata.best_block_hash.hex() if tip_resp.metadata.best_block_hash else "",
-                        "accumulated_difficulty": tip_resp.metadata.accumulated_difficulty.hex() if tip_resp.metadata.accumulated_difficulty else "0",
-                        "pruned_height": tip_resp.metadata.pruned_height,
-                        "is_synced": tip_resp.is_synced,
+                        "accumulated_difficulty": acc_diff,
+                        "pruned_height": int(tip_resp.metadata.pruned_height),
+                        "is_synced": bool(tip_resp.is_synced),
+                        "base_node_state": str(base_state_val),
                     }
                     has_at_least_one_success = True
                 except Exception as e:
@@ -186,11 +198,18 @@ class TariBaseNodeClient:
                 # 5. GetSyncProgress
                 try:
                     sync_resp = stub.GetSyncProgress(empty, timeout=self.timeout)
+                    short_desc_val = getattr(sync_resp, "short_desc", "")
                     sync_state_map = {0: "STARTING", 1: "HEADER_SYNC", 2: "BLOCK_SYNC", 3: "SYNCED"}
+                    state_code = getattr(sync_resp, "state", 0)
+                    sync_state_name = sync_state_map.get(state_code, "HORIZON_SYNC") if isinstance(state_code, int) else str(state_code)
+                    if short_desc_val and "Syncing" in short_desc_val:
+                        sync_state_name = "HORIZON_SYNC"
+
                     sync_data = {
-                        "tip": sync_resp.tip,
-                        "local_height": sync_resp.local_height,
-                        "state": sync_state_map.get(sync_resp.state, "SYNCED"),
+                        "tip": getattr(sync_resp, "tip", 0),
+                        "local_height": getattr(sync_resp, "local_height", 0),
+                        "state": sync_state_name,
+                        "short_desc": short_desc_val,
                     }
                     has_at_least_one_success = True
                 except Exception as e:
@@ -198,25 +217,33 @@ class TariBaseNodeClient:
 
                 # 6. GetNewBlockTemplate
                 try:
-                    if hasattr(base_node_pb2, 'PowAlgo'):
-                        algo_msg = base_node_pb2.PowAlgo(pow_algo=1)
-                        template_req = base_node_pb2.NewBlockTemplateRequest(algo=algo_msg, max_weight=1950)
-                    else:
-                        template_req = base_node_pb2.NewBlockTemplateRequest()
+                    algo_msg = base_node_pb2.PowAlgo(pow_algo=0)  # RandomX / POW_ALGOS_RANDOMXM
+                    template_req = base_node_pb2.NewBlockTemplateRequest(algo=algo_msg, max_weight=1950)
                     template_resp = stub.GetNewBlockTemplate(template_req, timeout=self.timeout)
+
+                    nbt = getattr(template_resp, "new_block_template", None)
+                    hdr = getattr(nbt, "header", None) if nbt else getattr(template_resp, "header", None)
+                    miner = getattr(template_resp, "miner_data", None)
+
+                    h_val = getattr(hdr, "height", 1) if hdr else (tip_data["height"] + 1)
+                    r_val = getattr(miner, "reward", 0) if miner else getattr(template_resp, "reward", 0)
+                    d_val = getattr(miner, "target_difficulty", 0) if miner else getattr(template_resp, "target_difficulty", 0)
+                    w_val = getattr(miner, "weight", 1950) if miner else getattr(template_resp, "weight", 1950)
+
                     template_data = {
                         "ready": True,
-                        "height": template_resp.header.height if template_resp.header else (tip_data["height"] + 1),
-                        "reward": template_resp.reward,
-                        "weight": template_resp.weight,
-                        "miner_data": template_resp.miner_data,
-                        "difficulty": template_resp.target_difficulty.hex() if template_resp.target_difficulty else "standard",
+                        "height": int(h_val),
+                        "reward": int(r_val),
+                        "weight": int(w_val),
+                        "miner_data": f"Target Diff: {int(d_val):,}" if d_val else "Available",
+                        "difficulty": str(d_val) if d_val else "12000000",
                     }
+                    has_at_least_one_success = True
                 except Exception as e:
-                    logger.debug("GetNewBlockTemplate failed or unsupported on this node: %s", e)
+                    logger.debug("GetNewBlockTemplate failed: %s", e)
                     template_data = {
                         "ready": False,
-                        "height": tip_data["height"] + 1 if tip_data["height"] else 0,
+                        "height": tip_data["height"] + 1 if tip_data["height"] else 1,
                         "reward": 0,
                         "weight": 1950,
                         "miner_data": "Mining template idle / not requested",
