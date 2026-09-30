@@ -315,12 +315,16 @@ services:
       timeout: 5s
       retries: 3`,
 
-    '.github/workflows/docker-publish.yml': `name: Build & Publish Image to GHCR
+    '.github/workflows/docker-publish.yml': `name: "Build and Publish Docker Image to GHCR"
 
 on:
   push:
     branches: [ "main" ]
-    tags: [ 'v*.*.*' ]
+    tags: [ "v*.*.*" ]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
 
 jobs:
   build-and-push:
@@ -330,20 +334,32 @@ jobs:
       packages: write
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
+      - name: "Checkout repository"
+        uses: actions/checkout@v4
+
+      - name: "Set lowercase image name"
+        run: echo "IMAGE_NAME=\${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
+
+      - name: "Set up QEMU"
+        uses: docker/setup-qemu-action@v3
+
+      - name: "Set up Docker Buildx"
+        uses: docker/setup-buildx-action@v3
+
+      - name: "Log in to GitHub Container Registry"
+        uses: docker/login-action@v3
         with:
-          registry: ghcr.io
+          registry: \${{ env.REGISTRY }}
           username: \${{ github.actor }}
           password: \${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@v5
+
+      - name: "Build and push Docker image"
+        uses: docker/build-push-action@v5
         with:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ghcr.io/\${{ github.repository }}:latest`,
+          tags: \${{ env.REGISTRY }}/\${{ env.IMAGE_NAME }}:latest`,
 
     'docker-compose.yml': `version: "3.8"
 
