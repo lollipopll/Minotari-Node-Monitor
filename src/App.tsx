@@ -470,17 +470,17 @@ message Empty {}
 message VersionResponse { string version = 1; }
 message NodeIdentity { bytes public_key = 1; repeated string public_addresses = 2; bytes node_id = 3; }
 message NetworkStatusResponse { enum Status { LISTENING = 0; CONNECTING = 1; ONLINE = 2; DEGRADED = 3; OFFLINE = 4; } Status status = 1; uint32 avg_latency_ms = 2; uint32 num_node_connections = 3; }
-message ChainMetadata { uint64 height_of_longest_chain = 1; bytes best_block_hash = 2; bytes accumulated_difficulty = 3; uint64 pruned_height = 4; uint64 timestamp = 5; }
-message TipInfoResponse { ChainMetadata metadata = 1; bool is_synced = 2; string base_node_state = 3; }
-message SyncProgressResponse { uint64 tip = 1; uint64 local_height = 2; enum SyncState { STARTING = 0; HEADER_SYNC = 1; BLOCK_SYNC = 2; SYNCED = 3; } SyncState state = 3; string short_desc = 4; }
+message ChainMetadata { uint64 best_block_height = 1; bytes best_block_hash = 2; bytes accumulated_difficulty = 3; uint64 pruned_height = 4; uint64 timestamp = 5; }
+message TipInfoResponse { ChainMetadata metadata = 1; bool initial_sync_achieved = 2; string base_node_state = 3; }
+message SyncProgressResponse { uint64 tip_height = 1; uint64 local_height = 2; string state = 3; string short_desc = 4; }
 message PowAlgo { enum PowAlgos { POW_ALGOS_RANDOM_X = 0; POW_ALGOS_SHA3X = 1; } PowAlgos pow_algo = 1; }
 message NewBlockTemplateRequest { PowAlgo algo = 1; uint64 max_weight = 2; }
 message Pow { PowAlgo pow_algo = 1; bytes accumulated_difficulty = 2; bytes pow_data = 3; }
 message BlockBody { repeated bytes inputs = 1; repeated bytes outputs = 2; repeated bytes kernels = 3; }
 message BlockHeader { uint64 version = 1; uint64 height = 2; bytes prev_hash = 3; uint64 timestamp = 4; bytes total_kernel_offset = 5; Pow pow = 6; bytes total_script_offset = 7; bytes nonce = 8; }
-message NewBlockTemplate { BlockHeader header = 1; BlockBody body = 2; }
+message NewBlockTemplate { BlockHeader header = 1; BlockBody body = 2; bool is_mempool_in_sync = 3; }
 message MinerData { PowAlgo algo = 1; uint64 target_difficulty = 2; uint64 reward = 3; uint64 total_fees = 4; }
-message NewBlockTemplateResponse { NewBlockTemplate new_block_template = 1; MinerData miner_data = 2; }
+message NewBlockTemplateResponse { NewBlockTemplate new_block_template = 1; bool initial_sync_achieved = 2; MinerData miner_data = 3; }
 message MempoolStatsResponse { uint64 unconfirmed_txs = 1; uint64 reorg_txs = 2; uint64 unconfirmed_weight = 3; }
 
 service BaseNode {

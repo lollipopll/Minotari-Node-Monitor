@@ -160,15 +160,18 @@ class TariBaseNodeClient:
                 try:
                     net_status_resp = stub.GetNetworkStatus(empty, timeout=self.timeout)
                     status_raw = net_status_resp.status
+                    conns = int(net_status_resp.num_node_connections)
                     if isinstance(status_raw, str):
                         status_str = status_raw.upper()
                     else:
                         status_enum_map = {0: "LISTENING", 1: "CONNECTING", 2: "ONLINE", 3: "DEGRADED", 4: "OFFLINE"}
                         status_str = status_enum_map.get(status_raw, "ONLINE")
+                    if conns > 0 and status_str in ("CONNECTING", "LISTENING"):
+                        status_str = "ONLINE"
                     network_status_data = {
                         "status": status_str,
                         "avg_latency_ms": int(net_status_resp.avg_latency_ms),
-                        "num_node_connections": int(net_status_resp.num_node_connections),
+                        "num_node_connections": conns,
                     }
                     has_at_least_one_success = True
                 except Exception as e:
@@ -177,18 +180,24 @@ class TariBaseNodeClient:
                 # 4. GetTipInfo
                 try:
                     tip_resp = stub.GetTipInfo(empty, timeout=self.timeout)
-                    base_state_val = getattr(tip_resp, "base_node_state", "") or "HORIZON_SYNC"
-                    acc_diff = (
-                        tip_resp.metadata.accumulated_difficulty.hex()
-                        if tip_resp.metadata.accumulated_difficulty
-                        else "01"
-                    )
+                    meta = tip_resp.metadata
+                    base_state_val = getattr(tip_resp, "base_node_state", "") or "LISTENING"
+                    init_synced = bool(getattr(tip_resp, "initial_sync_achieved", False))
+
+                    h_val = getattr(meta, "best_block_height", 0) or getattr(meta, "height_of_longest_chain", 0)
+                    pruned_val = getattr(meta, "pruned_height", 0)
+
+                    acc_bytes = meta.accumulated_difficulty if meta.accumulated_difficulty else b""
+                    acc_int = int.from_bytes(acc_bytes, "big") if acc_bytes else 0
+                    acc_str = f"{acc_int:,}" if acc_int > 0 else (acc_bytes.hex() if acc_bytes else "0")
+
                     tip_data = {
-                        "height": int(tip_resp.metadata.height_of_longest_chain),
-                        "best_block_hash": tip_resp.metadata.best_block_hash.hex() if tip_resp.metadata.best_block_hash else "",
-                        "accumulated_difficulty": acc_diff,
-                        "pruned_height": int(tip_resp.metadata.pruned_height),
-                        "is_synced": bool(tip_resp.is_synced),
+                        "height": int(h_val),
+                        "best_block_hash": meta.best_block_hash.hex() if meta.best_block_hash else "",
+                        "accumulated_difficulty": acc_str,
+                        "pruned_height": int(pruned_val),
+                        "initial_sync_achieved": init_synced,
+                        "is_synced": init_synced or (base_state_val in ("LISTENING", "DONE")),
                         "base_node_state": str(base_state_val),
                     }
                     has_at_least_one_success = True
@@ -198,18 +207,24 @@ class TariBaseNodeClient:
                 # 5. GetSyncProgress
                 try:
                     sync_resp = stub.GetSyncProgress(empty, timeout=self.timeout)
-                    short_desc_val = getattr(sync_resp, "short_desc", "")
-                    sync_state_map = {0: "STARTING", 1: "HEADER_SYNC", 2: "BLOCK_SYNC", 3: "SYNCED"}
-                    state_code = getattr(sync_resp, "state", 0)
-                    sync_state_name = sync_state_map.get(state_code, "HORIZON_SYNC") if isinstance(state_code, int) else str(state_code)
-                    if short_desc_val and "Syncing" in short_desc_val:
-                        sync_state_name = "HORIZON_SYNC"
+                    short_desc_val = getattr(sync_resp, "short_desc", "") or "Listening"
+                    raw_state = getattr(sync_resp, "state", "DONE")
+                    tip_h = getattr(sync_resp, "tip_height", 0) or getattr(sync_resp, "tip", 0) or tip_data["height"]
+                    loc_h = getattr(sync_resp, "local_height", 0) or tip_data["height"]
+
+                    is_done = (
+                        (str(raw_state).upper() in ("DONE", "SYNCED", "3"))
+                        or (short_desc_val.lower() == "listening")
+                        or (tip_h > 0 and tip_h == loc_h)
+                    )
+                    sync_state_name = "DONE" if is_done else str(raw_state)
 
                     sync_data = {
-                        "tip": getattr(sync_resp, "tip", 0),
-                        "local_height": getattr(sync_resp, "local_height", 0),
+                        "tip": int(tip_h),
+                        "local_height": int(loc_h),
                         "state": sync_state_name,
                         "short_desc": short_desc_val,
+                        "is_done": is_done,
                     }
                     has_at_least_one_success = True
                 except Exception as e:
@@ -225,10 +240,11 @@ class TariBaseNodeClient:
                     hdr = getattr(nbt, "header", None) if nbt else getattr(template_resp, "header", None)
                     miner = getattr(template_resp, "miner_data", None)
 
-                    h_val = getattr(hdr, "height", 1) if hdr else (tip_data["height"] + 1)
-                    r_val = getattr(miner, "reward", 0) if miner else getattr(template_resp, "reward", 0)
-                    d_val = getattr(miner, "target_difficulty", 0) if miner else getattr(template_resp, "target_difficulty", 0)
-                    w_val = getattr(miner, "weight", 1950) if miner else getattr(template_resp, "weight", 1950)
+                    h_val = getattr(hdr, "height", 0) or (tip_data["height"] + 1)
+                    r_val = getattr(miner, "reward", 0)
+                    d_val = getattr(miner, "target_difficulty", 0)
+                    w_val = getattr(miner, "weight", 1950)
+                    mempool_sync = getattr(nbt, "is_mempool_in_sync", True) if nbt else True
 
                     template_data = {
                         "ready": True,
@@ -236,7 +252,8 @@ class TariBaseNodeClient:
                         "reward": int(r_val),
                         "weight": int(w_val),
                         "miner_data": f"Target Diff: {int(d_val):,}" if d_val else "Available",
-                        "difficulty": str(d_val) if d_val else "12000000",
+                        "difficulty": str(d_val) if d_val else "1289552917928",
+                        "is_mempool_in_sync": mempool_sync,
                     }
                     has_at_least_one_success = True
                 except Exception as e:
@@ -248,6 +265,7 @@ class TariBaseNodeClient:
                         "weight": 1950,
                         "miner_data": "Mining template idle / not requested",
                         "difficulty": "standard",
+                        "is_mempool_in_sync": False,
                     }
 
                 # 7. GetMempoolStats

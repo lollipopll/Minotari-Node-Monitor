@@ -33,7 +33,7 @@ message NetworkStatusResponse {
 
 // Tip Info & Chain Metadata
 message ChainMetadata {
-    uint64 height_of_longest_chain = 1;
+    uint64 best_block_height = 1;
     bytes best_block_hash = 2;
     bytes accumulated_difficulty = 3;
     uint64 pruned_height = 4;
@@ -42,21 +42,15 @@ message ChainMetadata {
 
 message TipInfoResponse {
     ChainMetadata metadata = 1;
-    bool is_synced = 2;
+    bool initial_sync_achieved = 2;
     string base_node_state = 3;
 }
 
 // Sync Progress
 message SyncProgressResponse {
-    uint64 tip = 1;
+    uint64 tip_height = 1;
     uint64 local_height = 2;
-    enum SyncState {
-        STARTING = 0;
-        HEADER_SYNC = 1;
-        BLOCK_SYNC = 2;
-        SYNCED = 3;
-    }
-    SyncState state = 3;
+    string state = 3;
     string short_desc = 4;
 }
 
@@ -100,6 +94,7 @@ message BlockHeader {
 message NewBlockTemplate {
     BlockHeader header = 1;
     BlockBody body = 2;
+    bool is_mempool_in_sync = 3;
 }
 
 message MinerData {
@@ -111,7 +106,8 @@ message MinerData {
 
 message NewBlockTemplateResponse {
     NewBlockTemplate new_block_template = 1;
-    MinerData miner_data = 2;
+    bool initial_sync_achieved = 2;
+    MinerData miner_data = 3;
 }
 
 // Mempool Statistics

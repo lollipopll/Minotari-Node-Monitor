@@ -68,13 +68,14 @@ def record_log(level: str, msg: str):
 
 def parse_sync_info(sync_progress: Dict[str, Any], tip_info: Dict[str, Any]) -> Dict[str, Any]:
     """Parse Tari v6 horizon sync and kernel synchronization progress."""
-    short_desc = sync_progress.get("short_desc", "") if sync_progress else ""
-    base_state = tip_info.get("base_node_state", "") if tip_info else ""
-    raw_state = sync_progress.get("state", "STARTING") if sync_progress else "STARTING"
+    short_desc = (sync_progress.get("short_desc", "") if sync_progress else "").strip()
+    base_state = (tip_info.get("base_node_state", "") if tip_info else "").strip()
+    raw_state = (sync_progress.get("state", "STARTING") if sync_progress else "STARTING").strip()
+    init_synced = bool(tip_info.get("initial_sync_achieved", False)) if tip_info else False
 
     parsed: Dict[str, Any] = {
         "status_phase": base_state or raw_state,
-        "is_synced": tip_info.get("is_synced", False) if tip_info else False,
+        "is_synced": init_synced or tip_info.get("is_synced", False) if tip_info else False,
         "is_syncing": False,
         "stage_title": "Initializing",
         "current_items": 0,
@@ -87,7 +88,27 @@ def parse_sync_info(sync_progress: Dict[str, Any], tip_info: Dict[str, Any]) -> 
         "explanation": "Node daemon is discovering network peers.",
     }
 
-    if base_state == "HORIZON_SYNC" or "Syncing" in short_desc:
+    # Completion check: Tari v6 sets initialSyncAchieved=true, baseNodeState="LISTENING", state="DONE", shortDesc="Listening"
+    is_fully_synced = (
+        init_synced
+        or raw_state.upper() in ("DONE", "SYNCED")
+        or (base_state.upper() == "LISTENING" and "SYNCING" not in short_desc.upper())
+        or (short_desc.lower() == "listening")
+    )
+
+    if is_fully_synced:
+        parsed["is_synced"] = True
+        parsed["is_syncing"] = False
+        parsed["status_phase"] = "LISTENING"
+        parsed["percentage"] = 100.0
+        parsed["stage_title"] = "Fully Synchronized"
+        parsed["explanation"] = (
+            "Node has completed initial sync (local height matches network tip) "
+            "and is actively listening for new blocks and mempool transactions."
+        )
+        return parsed
+
+    if (base_state == "HORIZON_SYNC" or "Syncing" in short_desc) and not is_fully_synced:
         parsed["is_syncing"] = True
         parsed["status_phase"] = "HORIZON_SYNC"
         parsed["stage_title"] = "Horizon Sync (Kernel MMR)"
@@ -96,7 +117,6 @@ def parse_sync_info(sync_progress: Dict[str, Any], tip_info: Dict[str, Any]) -> 
             "and UTXO commitments before validating block transactions."
         )
 
-        # Regex: Syncing kernels: 2300800/7391619 (31%) from ba5ad438c741e6a24bf37edf2f (550.10 kernels/s) Latency: 351.00ns
         match = re.search(
             r"Syncing\s+([^:]+):\s+(\d+)/(\d+)\s+\((\d+)%\)\s+from\s+(\S+)\s+\(([\d\.]+)\s+([^)]+)\)",
             short_desc,
@@ -133,12 +153,6 @@ def parse_sync_info(sync_progress: Dict[str, Any], tip_info: Dict[str, Any]) -> 
         parsed["status_phase"] = "BLOCK_SYNC"
         parsed["stage_title"] = "Downloading Blocks"
         parsed["explanation"] = "Downloading and verifying blocks between horizon checkpoint and tip."
-    elif tip_info and tip_info.get("is_synced"):
-        parsed["is_synced"] = True
-        parsed["status_phase"] = "SYNCED"
-        parsed["percentage"] = 100.0
-        parsed["stage_title"] = "Fully Synchronized"
-        parsed["explanation"] = "Node is synchronized with chain tip and tracking real-time transactions."
 
     return parsed
 
