@@ -49,6 +49,22 @@
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
 
+        <!-- Production Health Alert Banner (Active Alarms) -->
+        <div id="healthAlertBanner" class="hidden border border-red-500/50 bg-red-950/40 rounded-xl p-4 flex flex-col gap-2.5 shadow-xl shadow-red-950/40 animate-pulse">
+            <div class="flex items-center justify-between border-b border-red-900/50 pb-2">
+                <div class="flex items-center space-x-2.5">
+                    <span class="p-1.5 rounded-lg bg-red-500/20 text-red-400 border border-red-500/40">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                    </span>
+                    <h3 id="healthAlertTitle" class="text-sm font-bold text-red-300 uppercase tracking-wider">Node Health Alert Triggered</h3>
+                </div>
+                <span id="healthAlertCountBadge" class="text-xs font-mono font-bold px-2.5 py-0.5 rounded-full bg-red-900/80 text-red-200 border border-red-700">1 Alert</span>
+            </div>
+            <div id="healthAlertList" class="space-y-1.5 text-xs font-mono text-red-200">
+                <!-- Dynamic active alerts -->
+            </div>
+        </div>
+
         <!-- Update Alert Banner (Conditional) -->
         <div id="updateBanner" class="hidden border border-amber-500/40 bg-amber-500/10 rounded-xl p-4 flex items-center justify-between">
             <div class="flex items-center space-x-3">
@@ -178,6 +194,87 @@
                 <div class="text-xs text-slate-400 flex justify-between pt-2 border-t border-slate-800">
                     <span>P2P Status:</span>
                     <span id="p2pStatus" class="font-semibold text-teal-300 mono">ONLINE</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Core Health & Operational Rules (4 Key Pillars) -->
+        <div class="border border-slate-800 bg-slate-900/90 rounded-xl p-5 space-y-4 shadow-xl">
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+                <div class="flex items-center space-x-2.5">
+                    <span class="p-2 rounded-lg bg-slate-800 text-teal-400 border border-slate-700">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                    </span>
+                    <div>
+                        <h3 class="text-sm font-bold text-white uppercase tracking-wider">Production Health & Alert Rules (4 Key Pillars)</h3>
+                        <p class="text-xs text-slate-400 mt-0.5">Continuous evaluation against node reliability & mining pool thresholds</p>
+                    </div>
+                </div>
+                <div id="overallHealthBadge" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    ALL 4 PILLARS HEALTHY
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <!-- Pillar 1: Node Global State -->
+                <div id="pillarNodeState" class="p-4 rounded-xl border border-slate-800 bg-slate-950/70 flex flex-col justify-between">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">1. Node State</span>
+                        <span id="pillarNodeStateBadge" class="text-[10px] font-mono px-2 py-0.5 rounded font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">OK</span>
+                    </div>
+                    <div class="my-2.5">
+                        <div id="pillarNodeStateVal" class="text-lg font-mono font-extrabold text-white">LISTENING</div>
+                        <div id="pillarNodeStateMsg" class="text-[11px] text-slate-400 mt-1 leading-snug">InitialSync: true</div>
+                    </div>
+                    <div class="text-[10px] text-slate-500 border-t border-slate-900 pt-1.5 font-mono">
+                        Trigger: != LISTENING &gt; 5 min
+                    </div>
+                </div>
+
+                <!-- Pillar 2: Block Height & Lag -->
+                <div id="pillarBlockLag" class="p-4 rounded-xl border border-slate-800 bg-slate-950/70 flex flex-col justify-between">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">2. Block Lag</span>
+                        <span id="pillarBlockLagBadge" class="text-[10px] font-mono px-2 py-0.5 rounded font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">OK</span>
+                    </div>
+                    <div class="my-2.5">
+                        <div id="pillarBlockLagVal" class="text-lg font-mono font-extrabold text-white">0 blocks lag</div>
+                        <div id="pillarBlockLagMsg" class="text-[11px] text-slate-400 mt-1 leading-snug">Synced to tip</div>
+                    </div>
+                    <div class="text-[10px] text-slate-500 border-t border-slate-900 pt-1.5 font-mono">
+                        Trigger: tip - local &gt; 2 blocks
+                    </div>
+                </div>
+
+                <!-- Pillar 3: Active Peer Connections -->
+                <div id="pillarPeers" class="p-4 rounded-xl border border-slate-800 bg-slate-950/70 flex flex-col justify-between">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">3. Peer Activity</span>
+                        <span id="pillarPeersBadge" class="text-[10px] font-mono px-2 py-0.5 rounded font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">OK</span>
+                    </div>
+                    <div class="my-2.5">
+                        <div id="pillarPeersVal" class="text-lg font-mono font-extrabold text-white">-- peers</div>
+                        <div id="pillarPeersMsg" class="text-[11px] text-slate-400 mt-1 leading-snug">Optimal: 20-50 peers</div>
+                    </div>
+                    <div class="text-[10px] text-slate-500 border-t border-slate-900 pt-1.5 font-mono">
+                        Trigger: &lt; 5 (warn), 0 (critical)
+                    </div>
+                </div>
+
+                <!-- Pillar 4: Mining Readiness & Pool Work -->
+                <div id="pillarMining" class="p-4 rounded-xl border border-slate-800 bg-slate-950/70 flex flex-col justify-between">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">4. Pool Readiness</span>
+                        <span id="pillarMiningBadge" class="text-[10px] font-mono px-2 py-0.5 rounded font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">OK</span>
+                    </div>
+                    <div class="my-2.5">
+                        <div id="pillarMiningVal" class="text-lg font-mono font-extrabold text-white">Mempool In Sync</div>
+                        <div id="pillarMiningMsg" class="text-[11px] text-slate-400 mt-1 leading-snug">Next: local + 1</div>
+                    </div>
+                    <div class="text-[10px] text-slate-500 border-t border-slate-900 pt-1.5 font-mono">
+                        Trigger: mempool desync or height mismatch
+                    </div>
                 </div>
             </div>
         </div>
@@ -464,6 +561,73 @@
             if (data.mempool) {
                 document.getElementById('mempoolTxs').textContent = data.mempool.unconfirmed_txs;
                 document.getElementById('mempoolReorg').textContent = data.mempool.reorg_txs;
+            }
+
+            // Production Health & Alert Rules Evaluation (4 Pillars)
+            const healthBanner = document.getElementById('healthAlertBanner');
+            const healthAlertList = document.getElementById('healthAlertList');
+            const healthAlertCountBadge = document.getElementById('healthAlertCountBadge');
+            const overallBadge = document.getElementById('overallHealthBadge');
+
+            if (data.health_evaluation) {
+                const he = data.health_evaluation;
+                const rules = he.rules || {};
+                const alerts = he.active_alerts || [];
+
+                // 1. Overall Badge & Active Alerts Banner
+                if (alerts.length > 0) {
+                    if (healthBanner) healthBanner.classList.remove('hidden');
+                    if (healthAlertCountBadge) healthAlertCountBadge.textContent = `${alerts.length} ${alerts.length === 1 ? 'Alert' : 'Alerts'}`;
+                    if (healthAlertList) {
+                        healthAlertList.innerHTML = alerts.map(a => {
+                            const badgeColor = a.severity === 'CRITICAL' ? 'bg-red-500/20 text-red-300 border-red-500/50' : 'bg-amber-500/20 text-amber-300 border-amber-500/50';
+                            return `<div class="p-2 rounded bg-red-950/80 border border-red-900/60 flex items-start gap-2">
+                                <span class="px-1.5 py-0.5 rounded text-[10px] font-bold border ${badgeColor}">${a.severity}</span>
+                                <div><span class="font-bold text-white">${a.rule}:</span> ${a.message}</div>
+                            </div>`;
+                        }).join('');
+                    }
+                    if (overallBadge) {
+                        const isCrit = he.overall_status === 'CRITICAL';
+                        overallBadge.className = isCrit 
+                            ? "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold bg-red-500/20 text-red-400 border border-red-500/40 animate-pulse"
+                            : "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold bg-amber-500/20 text-amber-400 border border-amber-500/40";
+                        overallBadge.innerHTML = `<span class="w-2 h-2 rounded-full ${isCrit ? 'bg-red-400' : 'bg-amber-400'} animate-ping"></span> ${he.overall_status} HEALTH ALERTS (${alerts.length})`;
+                    }
+                } else {
+                    if (healthBanner) healthBanner.classList.add('hidden');
+                    if (overallBadge) {
+                        overallBadge.className = "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30";
+                        overallBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> ALL 4 PILLARS HEALTHY`;
+                    }
+                }
+
+                // Helper to update individual pillar card
+                function updatePillar(id, ruleKey) {
+                    const r = rules[ruleKey];
+                    if (!r) return;
+                    const card = document.getElementById(id);
+                    const badge = document.getElementById(id + 'Badge');
+                    const val = document.getElementById(id + 'Val');
+                    const msg = document.getElementById(id + 'Msg');
+                    if (val) val.textContent = r.current_value;
+                    if (msg) msg.textContent = r.message;
+                    if (badge) {
+                        badge.textContent = r.status;
+                        if (r.status === 'OK') {
+                            badge.className = "text-[10px] font-mono px-2 py-0.5 rounded font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30";
+                        } else if (r.status === 'WARNING') {
+                            badge.className = "text-[10px] font-mono px-2 py-0.5 rounded font-bold bg-amber-500/20 text-amber-400 border border-amber-500/40";
+                        } else {
+                            badge.className = "text-[10px] font-mono px-2 py-0.5 rounded font-bold bg-red-500/20 text-red-400 border border-red-500/40";
+                        }
+                    }
+                }
+
+                updatePillar('pillarNodeState', 'node_state');
+                updatePillar('pillarBlockLag', 'block_lag');
+                updatePillar('pillarPeers', 'peer_connections');
+                updatePillar('pillarMining', 'mining_readiness');
             }
 
             // Logs

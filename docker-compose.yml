@@ -18,6 +18,12 @@ services:
       - GITHUB_REPO=${GITHUB_REPO:-tari-project/tari}
       - TARI_NODE_TLS=${TARI_NODE_TLS:-false}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - ALERT_MAX_BLOCK_LAG=${ALERT_MAX_BLOCK_LAG:-2}
+      - ALERT_MIN_PEER_CONNECTIONS=${ALERT_MIN_PEER_CONNECTIONS:-5}
+      - ALERT_NODE_STATE_GRACE_SECONDS=${ALERT_NODE_STATE_GRACE_SECONDS:-300}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL:-}
     # Enables accessing host machine services via host.docker.internal on Linux
     extra_hosts:
       - "host.docker.internal:host-gateway"

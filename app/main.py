@@ -20,6 +20,7 @@ from pydantic_settings import BaseSettings
 
 from app.tari_grpc import TariBaseNodeClient
 from app.github_checker import GitHubReleaseChecker
+from app.alert_manager import AlertManager
 
 # -----------------------------------------------------------------------------
 # Configuration
@@ -35,6 +36,14 @@ class Settings(BaseSettings):
     TARI_NODE_TLS: bool = False
     TARI_CA_CERT_PATH: str = ""
     LOG_LEVEL: str = "INFO"
+
+    # Alert Thresholds & Notification Channels
+    ALERT_MAX_BLOCK_LAG: int = 2
+    ALERT_MIN_PEER_CONNECTIONS: int = 5
+    ALERT_NODE_STATE_GRACE_SECONDS: int = 300  # 5 minutes
+    TELEGRAM_BOT_TOKEN: str = ""
+    TELEGRAM_CHAT_ID: str = ""
+    DISCORD_WEBHOOK_URL: str = ""
 
     class Config:
         env_file = ".env"
@@ -178,6 +187,7 @@ state: Dict[str, Any] = {
     "block_template": None,
     "mempool": None,
     "peers": [],
+    "health_evaluation": None,
     "config": {
         "host": settings.TARI_NODE_GRPC_HOST,
         "port": settings.TARI_NODE_GRPC_PORT,
@@ -196,6 +206,15 @@ tari_client = TariBaseNodeClient(
 github_checker = GitHubReleaseChecker(
     repo=settings.GITHUB_REPO,
     cache_ttl=settings.GITHUB_CHECK_INTERVAL_SECONDS,
+)
+
+alert_manager = AlertManager(
+    max_block_lag=settings.ALERT_MAX_BLOCK_LAG,
+    min_peer_connections=settings.ALERT_MIN_PEER_CONNECTIONS,
+    state_grace_seconds=settings.ALERT_NODE_STATE_GRACE_SECONDS,
+    telegram_bot_token=settings.TELEGRAM_BOT_TOKEN,
+    telegram_chat_id=settings.TELEGRAM_CHAT_ID,
+    discord_webhook_url=settings.DISCORD_WEBHOOK_URL,
 )
 
 # -----------------------------------------------------------------------------
@@ -281,6 +300,18 @@ async def monitoring_worker():
                 state["update_message"] = "Cannot verify update status while node is offline"
         except Exception as gh_err:
             logger.warning("Could not verify GitHub release: %s", gh_err)
+
+        # 3. Evaluate Health Rules & Trigger Alerts
+        try:
+            health_result = alert_manager.evaluate(state)
+            state["health_evaluation"] = health_result
+            if health_result.get("alerts_count", 0) > 0:
+                for al in health_result["active_alerts"]:
+                    al_log = f"HEALTH ALERT [{al['severity']}]: {al['rule']} -> {al['message']}"
+                    logger.warning(al_log)
+                    record_log("ALERT" if al["severity"] == "CRITICAL" else "WARN", al_log)
+        except Exception as eval_err:
+            logger.error("Error evaluating health rules: %s", eval_err)
 
         await asyncio.sleep(settings.POLL_INTERVAL_SECONDS)
 
